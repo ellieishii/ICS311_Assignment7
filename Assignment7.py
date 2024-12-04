@@ -36,3 +36,4 @@ if __name__ == "__main__":
     message = "aaabbbbcc"
     message_triple = send_compressed_message(sender, receiver, message)
     print(message_triple)
+    print(f"Metadata: {message_triple[2]}")
