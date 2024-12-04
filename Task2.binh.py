@@ -1,11 +1,8 @@
-import numpy as np
-import random
-import heapq
-from collections import deque
-from scipy.fft import fft, ifft
-from Crypto.Cipher import AES
-from Crypto.Util.Padding import pad, unpad
-from Crypto.Random import get_random_bytes
+from collections import deque 
+from zlib import compress, decompress  
+from Crypto.Cipher import AES  
+from Crypto.Util.Padding import pad, unpad 
+from Crypto.Random import get_random_bytes  
 
 # Graph Representation (Adjacency List)
 class Graph:
@@ -14,131 +11,123 @@ class Graph:
         self.adj_list = {i: [] for i in range(vertices)}  # adjacency list
 
     def add_edge(self, u, v):
-        self.adj_list[u].append(v)
-        self.adj_list[v].append(u)
+        self.adj_list[u].append(v)  # Add an undirected edge between nodes u and v
+        self.adj_list[v].append(u)  # Since the graph is undirected, add the reverse edge as well
 
 # BFS to find the shortest path in the graph
 def bfs(graph, start, end):
-    visited = [False] * graph.V
-    parent = [-1] * graph.V
-    queue = deque([start])
-    visited[start] = True
+    visited = [False] * graph.V  # Keeps track of visited nodes
+    parent = [-1] * graph.V  # Stores the parent of each node in the BFS tree
+    queue = deque([start])  # Initialize BFS queue
+    visited[start] = True  # Mark the start node as visited
     
     while queue:
-        node = queue.popleft()
+        node = queue.popleft()  # Pop the node from the front of the queue
         
-        if node == end:
+        if node == end:  # If the target node is found, stop searching
             break
         
+        # Iterate over the adjacent nodes of the current node
         for neighbor in graph.adj_list[node]:
-            if not visited[neighbor]:
-                visited[neighbor] = True
-                parent[neighbor] = node
-                queue.append(neighbor)
+            if not visited[neighbor]:  # If the neighbor has not been visited
+                visited[neighbor] = True  # Mark the neighbor as visited
+                parent[neighbor] = node  # Set the parent of the neighbor to the current node
+                queue.append(neighbor)  # Add the neighbor to the queue for further exploration
     
-    # Reconstruct the path
+    # Reconstruct the path from the start to the end
     path = []
     current = end
-    while current != -1:
+    while current != -1:  # Backtrack from the target node to the start node using the parent array
         path.append(current)
         current = parent[current]
     
-    return path[::-1]  # Reverse to get the correct order
+    return path[::-1]  # Reverse the path to get it in the correct order
 
-# FFT-based compression (Lossy Compression)
-def compress_message(message, compression_level):
-    # Convert message to an array of integers (assuming ASCII encoding)
-    message_data = np.array([ord(c) for c in message], dtype=float)
-    
-    # Apply FFT
-    freq_data = fft(message_data)
-    
-    # Keep only the significant frequencies based on compression level
-    num_keep = int(len(freq_data) * compression_level)
-    compressed_data = np.zeros_like(freq_data)
-    compressed_data[:num_keep] = freq_data[:num_keep]
-    
-    # Apply inverse FFT to get the compressed message
-    compressed_message = ifft(compressed_data).real
-    compressed_message = np.round(compressed_message).astype(int)
-    
-    # Convert back to string
-    compressed_str = ''.join(chr(x) for x in compressed_message if x > 0 and x < 256)
-    
-    return compressed_str
+# Lossless Compression using zlib
+def compress_message(message):
+    # Convert message to bytes (ASCII)
+    message_bytes = message.encode('utf-8')  # Encoding the message to bytes
+    compressed_message = compress(message_bytes)  # Compress the message using zlib
+    return compressed_message  # Return the compressed message as a byte string
+
+def decompress_message(compressed_message):
+    # Decompress the message using zlib
+    decompressed_message = decompress(compressed_message).decode('utf-8')  # Decompress and decode to string
+    return decompressed_message  # Return the decompressed message
 
 # AES Encryption and Decryption
 def encrypt_message(message, key):
-    cipher = AES.new(key, AES.MODE_CBC)
-    ct_bytes = cipher.encrypt(pad(message.encode(), AES.block_size))
-    return cipher.iv + ct_bytes  # Return IV + Ciphertext
+    cipher = AES.new(key, AES.MODE_CBC)  # Create a new AES cipher object in CBC mode
+    ct_bytes = cipher.encrypt(pad(message.encode(), AES.block_size))  # Encrypt the message after padding it
+    return cipher.iv + ct_bytes  # Return IV + Ciphertext to ensure decryption can use the same IV
 
 def decrypt_message(encrypted_message, key):
-    iv = encrypted_message[:16]  # Extract IV from the start
-    ct = encrypted_message[16:]  # Extract the ciphertext
-    cipher = AES.new(key, AES.MODE_CBC, iv)
-    decrypted_message = unpad(cipher.decrypt(ct), AES.block_size).decode()
-    return decrypted_message
+    iv = encrypted_message[:16]  # Extract IV from the encrypted message (first 16 bytes)
+    ct = encrypted_message[16:]  # Extract the actual ciphertext (everything after the IV)
+    cipher = AES.new(key, AES.MODE_CBC, iv)  # Create a new cipher object using the same IV
+    decrypted_message = unpad(cipher.decrypt(ct), AES.block_size).decode()  # Decrypt and unpad the message
+    return decrypted_message  # Return the decrypted message
 
 # Sender function: Finds a path, compresses, encrypts, and sends the message
-def send_message(graph, sender, receiver, message, compression_level, encryption_key):
+def send_message(graph, sender, receiver, message, encryption_key):
+    print("Sending message from {} to {}...".format(sender, receiver))
     # Step 1: Find a path using BFS
     path = bfs(graph, sender, receiver)
     
     if not path:
-        print("No path found between sender and receiver.")
-        return None
+        print("No path found between sender and receiver.")  # If no path is found, print a message
+        return None  # Return None to indicate that no message was sent
     
-    print(f"Path found: {path}")
+    print("Path found: {}".format(path))
     
-    # Step 2: Compress the message using FFT (Lossy Compression)
-    compressed_message = compress_message(message, compression_level)
-    print(f"Compressed message: {compressed_message}")
+    # Step 2: Compress the message using zlib (lossless compression)
+    compressed_message = compress_message(message)
+    print("Compressed message (length {} bytes): {}".format(len(compressed_message), compressed_message))
     
     # Step 3: Encrypt the message
-    encrypted_message = encrypt_message(compressed_message, encryption_key)
-    print(f"Encrypted message (Hex): {encrypted_message.hex()}")
+    encrypted_message = encrypt_message(compressed_message.decode('latin1'), encryption_key)  # Encrypt the compressed message
+    print("Encrypted message (Hex): {}".format(encrypted_message.hex()))  # Print the encrypted message in hexadecimal format
     
-    return encrypted_message, path
+    return encrypted_message, path  # Return the encrypted message and the path
 
 # Receiver function: Decrypts and decompresses the message
 def receive_message(encrypted_message, encryption_key):
+    print("Receiver is decrypting and reconstructing the message...")
     # Step 1: Decrypt the message
     decrypted_message = decrypt_message(encrypted_message, encryption_key)
-    print(f"Decrypted message: {decrypted_message}")
+    print("Decrypted message (bytes): {}".format(decrypted_message))  # Print the decrypted message in byte format
     
-    # Step 2: Decompress the message using FFT (Inverse FFT)
-    # (Note: This is a simple approach, and we are assuming the message was compressed using FFT)
-    message_data = np.array([ord(c) for c in decrypted_message], dtype=float)
-    reconstructed_data = ifft(message_data).real
-    reconstructed_message = ''.join(chr(int(round(x))) for x in reconstructed_data if 0 < x < 256)
+    # Step 2: Decompress the message using zlib
+    decompressed_message = decompress_message(decrypted_message.encode('latin1'))  # Decompress the message back to string
+    print("Decompressed message: {}".format(decompressed_message))  # Print the decompressed message
     
-    print(f"Reconstructed message (after lossy compression): {reconstructed_message}")
-    return reconstructed_message
+    return decompressed_message  # Return the decompressed message
 
 # Main
 def main():
-    # Create a sample graph
+    print("Initializing the network graph...")
+    # Create a sample graph (6 nodes representing people)
     graph = Graph(6)  # 6 people
-    graph.add_edge(0, 1)
+    graph.add_edge(0, 1)  # Add edges between the nodes
     graph.add_edge(1, 2)
     graph.add_edge(2, 3)
     graph.add_edge(0, 4)
     graph.add_edge(4, 5)
 
-    # Define the sender, receiver, message, compression level, and encryption key
-    sender = 0
-    receiver = 5
-    message = "This is a secret message!"
-    compression_level = 0.5  # Keep 50% of the frequencies
+    # Define the sender, receiver, message, and encryption key
+    sender = 0  # Sender node
+    receiver = 5  # Receiver node
+    message = "This is a secret message!"  # The message to be sent
     encryption_key = get_random_bytes(16)  # AES key (16 bytes for AES-128)
 
     # Sender sends the message
-    encrypted_message, path = send_message(graph, sender, receiver, message, compression_level, encryption_key)
+    encrypted_message, path = send_message(graph, sender, receiver, message, encryption_key)
 
     if encrypted_message:
         # Receiver receives and processes the message
         reconstructed_message = receive_message(encrypted_message, encryption_key)
 
+# Run the main function if the script is executed directly
 if __name__ == "__main__":
     main()
+
