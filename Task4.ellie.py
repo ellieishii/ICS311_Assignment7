@@ -141,9 +141,11 @@ def main():
     # Verify message
     is_valid = messenger.verify_signed_message(message)
     
+    # Output the message details, including the signature
     print(f"Sender: {message.sender}")
     print(f"Receiver: {message.receiver}")
     print(f"Message: {message.body}")
+    print(f"Signature: {message.signature.hex()}")
     print(f"Verification: {'✅ Valid' if is_valid else '❌ Invalid'}")
 
 if __name__ == "__main__":
